@@ -25,6 +25,9 @@ g++ -static -O2 -std=c++17 -o benchmark.exe cache-oblivious.cpp   # Windows (MSY
 
 > Cada medicion es el promedio de 5 repeticiones.
 
+<img width="1271" height="316" alt="image" src="https://github.com/user-attachments/assets/5e742108-7980-4000-9ee8-b44eb1b743b6" />
+
+
 ## Por que el layout vEB es mas rapido?
 
 - **Localidad espacial**: los nodos padre e hijo quedan contiguos en
