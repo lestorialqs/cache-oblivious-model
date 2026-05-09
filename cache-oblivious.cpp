@@ -6,12 +6,16 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+<<<<<<< HEAD
 #include <random>
+=======
+>>>>>>> e1da487cf989ff506949c5175e8f7301c7e1f742
 #include <vector>
 
 using namespace std;
 using clk = chrono::high_resolution_clock;
 
+<<<<<<< HEAD
 // ======================== BST con punteros ========================
 
 struct Nodo {
@@ -258,12 +262,17 @@ void generar_readme(const vector<Resultado> &resultados) {
 }
 
 // ======================== Main ========================
+=======
+class Node{
+};
+>>>>>>> e1da487cf989ff506949c5175e8f7301c7e1f742
 
 int main() {
   const int T = 5;
   cout << "Benchmark: BST con punteros vs Cache-Oblivious Static Tree (vEB)\n";
   cout << "Repeticiones por prueba: " << T << "\n";
 
+<<<<<<< HEAD
   vector<Resultado> resultados;
   resultados.push_back(experimento(1'000, 100'000, T));
   resultados.push_back(experimento(10'000, 100'000, T));
@@ -273,4 +282,29 @@ int main() {
 
   generar_readme(resultados);
   return 0;
+=======
+    // Crear vectores
+    vector<int> vec10k;
+    vector<int> vec100k;
+    vector<int> vec1M;
+
+    // Insertar valores secuencialmente en vector de 10k
+    for (int i = 0; i < 10000; i++) {
+        vec10k.push_back(i);
+    }
+
+    // Insertar valores secuencialmente en vector de 100k
+    for (int i = 0; i < 100000; i++) {
+        vec100k.push_back(i);
+    }
+
+    // Insertar valores secuencialmente en vector de 1M
+    for (int i = 0; i < 1000000; i++) {
+        vec1M.push_back(i);
+    }
+
+    cout << "Vectores llenados correctamente." << endl;
+
+    return 0;
+>>>>>>> e1da487cf989ff506949c5175e8f7301c7e1f742
 }
