@@ -1,4 +1,4 @@
-# Cache-Oblivious Static Tree — benchmark
+# Cache-Oblivious Static Tree — Benchmark
 
 Comparacion de tiempos de busqueda entre un **BST con punteros** y un
 **arbol estatico con layout van Emde Boas (vEB)**.
@@ -17,15 +17,15 @@ g++ -static -O2 -std=c++17 -o benchmark.exe cache-oblivious.cpp   # Windows (MSY
 
 | N (elementos) | Consultas | BST (ms) | vEB (ms) | Speedup |
 |:-------------:|:---------:|:--------:|:--------:|:-------:|
-| 1000 | 100000 | 2.45 | 3.25 | 0.75x |
-| 10000 | 100000 | 4.45 | 4.76 | 0.94x |
-| 100000 | 100000 | 7.69 | 7.44 | 1.03x |
-| 1000000 | 1000000 | 188.03 | 112.79 | 1.67x |
-| 5000000 | 1000000 | 371.09 | 202.19 | 1.84x |
+| 1000 | 100000 | 2.57 | 3.38 | 0.76x |
+| 10000 | 100000 | 5.25 | 5.56 | 0.94x |
+| 100000 | 100000 | 8.32 | 7.34 | 1.13x |
+| 1000000 | 1000000 | 207.64 | 123.05 | 1.69x |
+| 5000000 | 1000000 | 434.68 | 228.24 | 1.90x |
 
 > Cada medicion es el promedio de 5 repeticiones.
 
-## El layout vEB es mas rapido porque : 
+## Por que el layout vEB es mas rapido?
 
 - **Localidad espacial**: los nodos padre e hijo quedan contiguos en
   memoria, reduciendo *cache misses*.
