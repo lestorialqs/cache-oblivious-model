@@ -24,6 +24,7 @@ g++ -static -O2 -std=c++17 -o benchmark.exe cache-oblivious.cpp   # Windows (MSY
 | 5000000 | 1000000 | 434.68 | 228.24 | 1.90x |
 
 > Cada medicion es el promedio de 5 repeticiones.
+<img width="1322" height="622" alt="image" src="https://github.com/user-attachments/assets/dcd9d693-1a6e-4f0f-a9c7-352b4f61362f" />
 
 <img width="1271" height="316" alt="image" src="https://github.com/user-attachments/assets/5e742108-7980-4000-9ee8-b44eb1b743b6" />
 
