@@ -1,4 +1,4 @@
-# Cache-Oblivious Static Tree — Benchmark
+# Cache-Oblivious Static Tree — benchmark
 
 Comparacion de tiempos de busqueda entre un **BST con punteros** y un
 **arbol estatico con layout van Emde Boas (vEB)**.
