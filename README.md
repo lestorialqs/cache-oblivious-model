@@ -25,7 +25,7 @@ g++ -static -O2 -std=c++17 -o benchmark.exe cache-oblivious.cpp   # Windows (MSY
 
 > Cada medicion es el promedio de 5 repeticiones.
 
-## Por que el layout vEB es mas rapido?
+## El layout vEB es mas rapido porque : 
 
 - **Localidad espacial**: los nodos padre e hijo quedan contiguos en
   memoria, reduciendo *cache misses*.
