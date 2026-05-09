@@ -1,6 +1,3 @@
-// benchmark: bst con punteros vs cache-oblivious static tree (vEB layout)
-// compila con: g++ -static -O2 -std=c++17 -o benchmark cache-oblivious.cpp
-
 #include <chrono>
 #include <climits>
 #include <fstream>
@@ -12,7 +9,7 @@
 using namespace std;
 using clk = chrono::high_resolution_clock;
 
-// ======================== BST con punteros ========================
+// BST
 
 struct Nodo {
   int dato;
@@ -48,30 +45,25 @@ void liberar_bst(Nodo *raiz) {
   delete raiz;
 }
 
-// ======================== vEB layout (arbol perfecto) ========================
-//
-// Estrategia:
-//   1. Padding del arreglo a 2^h - 1 (arbol perfecto) con INT_MAX
-//   2. Construir layout BFS (Eytzinger) via recorrido in-order
-//   3. Permutar BFS -> vEB recursivamente
-//   4. Guardar nodos como structs {val, izq, der} en orden vEB
-//      -> 12 bytes por nodo, todo contiguo en un solo vector
-//
+//  vEB layout
+// construir layout BFS (Eytzinger) via recorrido in-order
+// permutar BFS -> vEB recursivamente
+// guardar nodos como structs {val, izq, der} en orden vEB
 
 static const int NINGUNO = -1;
 
 struct VebTree {
   struct NodoV {
     int val;
-    int izq, der; // indices de hijos en el arreglo nodes[]
+    int izq, der;
   };
 
   vector<NodoV> nodes; // arreglo en orden vEB
-  int n;               // tamanio (2^h - 1)
+  int n;               // tamaño (2^h - 1)
   int raiz;            // indice de la raiz en nodes[]
 
-  // --- Paso 1: Eytzinger (BFS) layout desde arreglo ordenado ---
-  // Recorrido in-order del arbol implicito -> llena posiciones BFS
+
+  // recorrido in-order del arbol implicito -> llena posiciones BFS
   void eytzinger(const vector<int> &sorted, vector<int> &bfs, int i, int &k) {
     if (i >= n)
       return;
@@ -80,11 +72,11 @@ struct VebTree {
     eytzinger(sorted, bfs, 2 * i + 2, k);
   }
 
-  // --- Paso 2: Permutacion vEB ---
-  // Genera order[pos++] = bfs_index
-  // Para un subarbol de altura h con raiz en bfs_root:
-  //   - Top tree: primeros ceil(h/2) niveles
-  //   - Bottom trees: arboles colgando de las hojas del top
+  //  permutacion vEB 
+  // genera order[pos++] = bfs_index
+  // para un subarbol de altura h con raiz en bfs_root:
+  //  top tree=  primeros ceil(h/2) niveles
+  //   bottom trees =  arboles colgando de las hojas del top
   void veb_perm(vector<int> &order, int bfs_root, int &pos, int h) {
     if (h <= 0 || bfs_root >= n)
       return;
@@ -96,7 +88,7 @@ struct VebTree {
     int h_bot = h - h_top;
     int num_bots = 1 << h_top;
 
-    // Colocar top tree (recursivamente en orden vEB)
+    // colocar top tree recursivamente en orden vEB
     veb_perm(order, bfs_root, pos, h_top);
 
     // Colocar cada bottom tree
@@ -112,7 +104,7 @@ struct VebTree {
   void construir(const vector<int> &sorted_orig) {
     int orig_n = (int)sorted_orig.size();
 
-    // Padding a arbol perfecto (2^h - 1 nodos)
+    // padding a arbol perfecto (2^h - 1 nodos)
     int h = 1;
     while ((1 << h) - 1 < orig_n)
       h++;
@@ -124,22 +116,22 @@ struct VebTree {
     for (int i = orig_n; i < n; i++)
       sorted[i] = INT_MAX; // centinelas
 
-    // 1) BFS layout
+    //BFS layout
     vector<int> bfs(n);
     int k = 0;
     eytzinger(sorted, bfs, 0, k);
 
-    // 2) Permutacion vEB: order[veb_pos] = bfs_index
+    //permutacion vEB: order[veb_pos] = bfs_index
     vector<int> order(n);
     int pos = 0;
     veb_perm(order, 0, pos, h);
 
-    // Invertir: bfs_to_veb[bfs_idx] = veb_idx
+    // invertir: bfs_to_veb[bfs_idx] = veb_idx
     vector<int> bfs_to_veb(n);
     for (int i = 0; i < n; i++)
       bfs_to_veb[order[i]] = i;
 
-    // 3) Construir nodos en orden vEB con hijos precomputados
+    // construir nodos en orden vEB con hijos precomputados
     nodes.resize(n);
     for (int i = 0; i < n; i++) {
       int vi = bfs_to_veb[i];
@@ -151,7 +143,7 @@ struct VebTree {
     raiz = bfs_to_veb[0];
   }
 
-  // Busqueda: solo seguir izq/der como en un BST normal
+  //buqueda: solo seguir izq/der como en un BST normal
   // pero los accesos a nodes[] siguen el layout vEB -> cache-friendly
   bool buscar(int val) const {
     int pos = raiz;
@@ -165,7 +157,7 @@ struct VebTree {
   }
 };
 
-// ======================== Medicion de tiempos ========================
+// medicion
 
 double medir_bst(Nodo *raiz, const vector<int> &consultas) {
   auto ini = clk::now();
@@ -187,7 +179,7 @@ double medir_veb(const VebTree &arbol, const vector<int> &consultas) {
   return chrono::duration<double, milli>(fin - ini).count();
 }
 
-// ======================== Experimento ========================
+// experimento
 
 struct Resultado {
   int n_elems;
@@ -237,45 +229,6 @@ Resultado experimento(int n_elems, int n_consult, int T) {
   return {n_elems, n_consult, prom_bst, prom_veb, speedup};
 }
 
-// ======================== Generar README ========================
-
-void generar_readme(const vector<Resultado> &resultados) {
-  ofstream out("README.md");
-  out << "# Cache-Oblivious Static Tree — Benchmark\n\n";
-  out << "Comparacion de tiempos de busqueda entre un **BST con punteros** y un\n";
-  out << "**arbol estatico con layout van Emde Boas (vEB)**.\n\n";
-  out << "## Compilacion y ejecucion\n\n";
-  out << "```bash\n";
-  out << "g++ -O2 -std=c++17 -o benchmark cache-oblivious.cpp   # Linux / macOS\n";
-  out << "./benchmark\n\n";
-  out << "g++ -static -O2 -std=c++17 -o benchmark.exe cache-oblivious.cpp   # Windows (MSYS2)\n";
-  out << ".\\benchmark.exe\n";
-  out << "```\n\n";
-  out << "## Resultados\n\n";
-  out << "| N (elementos) | Consultas | BST (ms) | vEB (ms) | Speedup |\n";
-  out << "|:-------------:|:---------:|:--------:|:--------:|:-------:|\n";
-  for (auto &r : resultados) {
-    out << "| " << r.n_elems << " | " << r.n_consult << " | "
-        << fixed << setprecision(2) << r.t_bst << " | " << r.t_veb << " | "
-        << setprecision(2) << r.speedup << "x |\n";
-  }
-  out << "\n> Cada medicion es el promedio de 5 repeticiones.\n\n";
-  out << "## Por que el layout vEB es mas rapido?\n\n";
-  out << "- **Localidad espacial**: los nodos padre e hijo quedan contiguos en\n";
-  out << "  memoria, reduciendo *cache misses*.\n";
-  out << "- **Arreglo compacto**: cada nodo ocupa 12 bytes (valor + 2 indices)\n";
-  out << "  vs ~24 bytes del BST con punteros (dato + 2 punteros de 8 bytes).\n";
-  out << "- **Sin dispersion de heap**: el BST asigna cada nodo con `new`,\n";
-  out << "  esparciendo datos por toda la RAM. El vEB usa un solo `vector`\n";
-  out << "  contiguo.\n";
-  out << "- **Menos trafico de cache**: a medida que N crece, el arbol ya no\n";
-  out << "  cabe en cache L2/L3 y el layout vEB minimiza los accesos a RAM.\n";
-  out.close();
-  cout << "\n[README.md generado con tabla de resultados]\n";
-}
-
-// ======================== Main ========================
-
 int main() {
   const int T = 5;
   cout << "Benchmark: BST con punteros vs Cache-Oblivious Static Tree (vEB)\n";
@@ -287,7 +240,5 @@ int main() {
   resultados.push_back(experimento(100'000, 100'000, T));
   resultados.push_back(experimento(1'000'000, 1'000'000, T));
   resultados.push_back(experimento(5'000'000, 1'000'000, T));
-
-  generar_readme(resultados);
   return 0;
 }
