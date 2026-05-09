@@ -1,37 +1,31 @@
-// benchmark: bst con punteros vs cache-oblivious static tree (vEB layout)
-// compila con: g++ -O2 -std=c++17 -o benchmark cache-oblivious.cpp
+
 
 #include <chrono>
-#include <climits>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
-<<<<<<< HEAD
 #include <random>
-=======
->>>>>>> e1da487cf989ff506949c5175e8f7301c7e1f742
 #include <vector>
 
 using namespace std;
 using clk = chrono::high_resolution_clock;
 
-<<<<<<< HEAD
-// ======================== BST con punteros ========================
+//  BST
 
 struct Nodo {
   int dato;
-  Nodo *izq, *der;
+  Nodo *izq;
+  Nodo *der;
   Nodo(int v) : dato(v), izq(nullptr), der(nullptr) {}
 };
 
+// construye bst balanceado desde arreglo ordenado
 Nodo *construir_bst(const vector<int> &arr, int l, int r) {
   if (l > r)
     return nullptr;
-  int m = l + (r - l) / 2;
-  Nodo *n = new Nodo(arr[m]);
-  n->izq = construir_bst(arr, l, m - 1);
-  n->der = construir_bst(arr, m + 1, r);
-  return n;
+  int m = (l + r) / 2;
+  Nodo *nodo = new Nodo(arr[m]);
+  nodo->izq = construir_bst(arr, l, m - 1);
+  nodo->der = construir_bst(arr, m + 1, r);
+  return nodo;
 }
 
 bool buscar_bst(Nodo *raiz, int val) {
@@ -51,109 +45,128 @@ void liberar_bst(Nodo *raiz) {
   delete raiz;
 }
 
-// ======================== vEB layout (arbol perfecto) ========================
-
-static const int NINGUNO = -1;
+int log2_entero(int n) {
+  int h = 0;
+  while (n > 1) {
+    n >>= 1;
+    h++;
+  }
+  return h;
+}
 
 struct VebTree {
-  // Cada nodo guarda valor + indices de hijos (todo contiguo en memoria)
-  struct NodoV {
-    int val;
-    int izq, der; // indices hijo en el arreglo nodes[]
-  };
+  vector<int> datos;
+  int n;
 
-  vector<NodoV> nodes; // arreglo en orden vEB
-  int n;               // tamanio (2^h - 1)
-  int raiz;            // indice de la raiz en nodes[]
-
-  // --- Paso 1: Eytzinger (BFS) layout desde arreglo ordenado ---
-  void eytzinger(const vector<int> &sorted, vector<int> &bfs, int i, int &k) {
-    if (i >= n)
+  // llena datos[] con el layout veb recursivamente
+  // sorted[sl..sr] va a datos[dl..]
+  void _build(const vector<int> &sorted, int sl, int sr, int dl) {
+    if (sl > sr)
       return;
-    eytzinger(sorted, bfs, 2 * i + 1, k);
-    bfs[i] = sorted[k++];
-    eytzinger(sorted, bfs, 2 * i + 2, k);
-  }
-
-  // --- Paso 2: Permutacion vEB ---
-  // order[pos++] = bfs_index  (orden en que aparecen nodos BFS en el layout vEB)
-  void veb_perm(vector<int> &order, int bfs_root, int &pos, int h) {
-    if (h <= 0 || bfs_root >= n)
-      return;
-    if (h == 1) {
-      order[pos++] = bfs_root;
+    if (sl == sr) {
+      datos[dl] = sorted[sl];
       return;
     }
-    int h_top = (h + 1) / 2;
-    int h_bot = h - h_top;
-    int num_bots = 1 << h_top;
 
-    // Colocar top tree (primeros h_top niveles)
-    veb_perm(order, bfs_root, pos, h_top);
+    int cnt = sr - sl + 1;
+    int h = log2_entero(cnt);       // altura del subarbol
+    int h_top = (h + 1) / 2;        // altura del top tree
+    int tam_top = (1 << h_top) - 1; // nodos en el top tree
 
-    // Colocar cada bottom tree
-    for (int i = 0; i < num_bots; i++) {
-      int bot_bfs = bfs_root * (1 << h_top) + ((1 << h_top) - 1) + i;
-      if (bot_bfs < n)
-        veb_perm(order, bot_bfs, pos, h_bot);
+    // primero colocamos el top tree
+    _build(sorted, sl, sl + tam_top - 1, dl);
+
+    // luego los bottom trees uno tras otro
+    int num_bot = tam_top + 1;
+    int n_bot = cnt - tam_top;
+    int tam_base = n_bot / num_bot;
+    int extra = n_bot % num_bot; // los primeros 'extra' bottoms tienen +1
+
+    int src = sl + tam_top; // indice fuente en sorted
+    int dst = dl + tam_top; // indice destino en datos
+
+    for (int i = 0; i < num_bot && src <= sr; i++) {
+      int tam_i = tam_base + (i < extra ? 1 : 0);
+      if (tam_i == 0)
+        continue;
+      _build(sorted, src, src + tam_i - 1, dst);
+      src += tam_i;
+      dst += tam_i;
     }
   }
 
-  void construir(const vector<int> &sorted_orig) {
-    int orig_n = (int)sorted_orig.size();
-
-    // Padding a arbol perfecto (2^h - 1 nodos)
-    int h = 1;
-    while ((1 << h) - 1 < orig_n)
-      h++;
-    n = (1 << h) - 1;
-
-    vector<int> sorted(n);
-    for (int i = 0; i < orig_n; i++)
-      sorted[i] = sorted_orig[i];
-    for (int i = orig_n; i < n; i++)
-      sorted[i] = INT_MAX;
-
-    // 1) BFS layout
-    vector<int> bfs(n);
-    int k = 0;
-    eytzinger(sorted, bfs, 0, k);
-
-    // 2) Permutacion vEB
-    vector<int> order(n);
-    int pos = 0;
-    veb_perm(order, 0, pos, h);
-
-    // Invertir: bfs_to_veb[bfs_idx] = veb_idx
-    vector<int> bfs_to_veb(n);
-    for (int i = 0; i < n; i++)
-      bfs_to_veb[order[i]] = i;
-
-    // 3) Construir nodos en orden vEB con hijos precomputados
-    nodes.resize(n);
-    for (int i = 0; i < n; i++) {
-      int vi = bfs_to_veb[i];
-      nodes[vi].val = bfs[i];
-      int lb = 2 * i + 1, rb = 2 * i + 2;
-      nodes[vi].izq = (lb < n) ? bfs_to_veb[lb] : NINGUNO;
-      nodes[vi].der = (rb < n) ? bfs_to_veb[rb] : NINGUNO;
-    }
-    raiz = bfs_to_veb[0];
+  void construir(const vector<int> &sorted) {
+    n = sorted.size();
+    datos.resize(n);
+    if (n > 0)
+      _build(sorted, 0, n - 1, 0);
   }
 
-  bool buscar(int val) const {
-    int pos = raiz;
-    while (pos != NINGUNO) {
-      const NodoV &nd = nodes[pos];
-      if (val == nd.val)
+  // devuelve la raiz del subarbol veb en datos[dl..dr]
+  // bajamos siempre al top tree hasta llegar a un solo nodo
+  int get_raiz(int dl, int dr) const {
+    while (dl < dr) {
+      int cnt = dr - dl + 1;
+      int h = log2_entero(cnt);
+      int h_top = (h + 1) / 2;
+      int tam_top = (1 << h_top) - 1;
+      dr = dl + tam_top - 1; // subimos al top
+    }
+    return datos[dl];
+  }
+
+  // busqueda navegando el layout veb sin punteros
+  bool _search(int val, int dl, int dr) const {
+    while (dl <= dr) {
+      int cnt = dr - dl + 1;
+      if (cnt == 1)
+        return datos[dl] == val;
+
+      int h = log2_entero(cnt);
+      int h_top = (h + 1) / 2;
+      int tam_top = (1 << h_top) - 1;
+
+      // la raiz separa entre menores y mayores
+      int raiz_val = get_raiz(dl, dl + tam_top - 1);
+
+      if (val == raiz_val)
         return true;
-      pos = (val < nd.val) ? nd.izq : nd.der;
+
+      int n_bot = cnt - tam_top;
+      int num_bot = tam_top + 1;
+      int tam_base = n_bot / num_bot;
+      int extra = n_bot % num_bot;
+      int tam0 = tam_base + (extra > 0 ? 1 : 0); // tamanio primer bottom
+
+      if (val < raiz_val) {
+        // buscar en el top y luego en el primer bottom (hijo izq)
+        bool en_top = _search(val, dl, dl + tam_top - 1);
+        if (en_top)
+          return true;
+        if (tam0 == 0)
+          return false;
+        dl = dl + tam_top;
+        dr = dl + tam0 - 1;
+      } else {
+        // buscar en el top y luego en los bottoms del lado derecho
+        bool en_top = _search(val, dl, dl + tam_top - 1);
+        if (en_top)
+          return true;
+        int dst = dl + tam_top + tam0;
+        int rem = n_bot - tam0;
+        if (rem <= 0)
+          return false;
+        dl = dst;
+        dr = dst + rem - 1;
+      }
     }
     return false;
   }
+
+  bool buscar(int val) const { return _search(val, 0, n - 1); }
 };
 
-// ======================== Medicion de tiempos ========================
+//   tiempos
 
 double medir_bst(Nodo *raiz, const vector<int> &consultas) {
   auto ini = clk::now();
@@ -175,36 +188,30 @@ double medir_veb(const VebTree &arbol, const vector<int> &consultas) {
   return chrono::duration<double, milli>(fin - ini).count();
 }
 
-// ======================== Experimento ========================
+//  Experimento
 
-struct Resultado {
-  int n_elems;
-  int n_consult;
-  double t_bst;
-  double t_veb;
-  double speedup;
-};
-
-Resultado experimento(int n_elems, int n_consult, int T) {
+void experimento(int n_elems, int n_consult, int T) {
   cout << "\n=== n=" << n_elems << " | consultas=" << n_consult
        << " | repeticiones=" << T << " ===\n";
 
-  // datos ordenados (numeros pares para tener hits y misses)
+  // datos ordenados sin repeticion (numeros pares)
   vector<int> datos(n_elems);
   for (int i = 0; i < n_elems; i++)
     datos[i] = i * 2;
 
-  // consultas aleatorias
+  // consultas aleatorias: mezcla de presentes y ausentes
   mt19937 rng(42);
   uniform_int_distribution<int> dist(0, n_elems * 2);
   vector<int> consultas(n_consult);
   for (int &q : consultas)
     q = dist(rng);
 
-  double t_bst = 0.0, t_veb = 0.0;
+  double t_bst = 0.0;
+  double t_veb = 0.0;
 
   for (int t = 0; t < T; t++) {
     Nodo *raiz = construir_bst(datos, 0, n_elems - 1);
+
     VebTree veb;
     veb.construir(datos);
 
@@ -216,95 +223,21 @@ Resultado experimento(int n_elems, int n_consult, int T) {
 
   double prom_bst = t_bst / T;
   double prom_veb = t_veb / T;
-  double speedup = prom_bst / prom_veb;
 
   cout << "  BST promedio   : " << prom_bst << " ms\n";
   cout << "  VEB promedio   : " << prom_veb << " ms\n";
-  cout << "  Speedup VEB/BST: " << speedup << "x\n";
-
-  return {n_elems, n_consult, prom_bst, prom_veb, speedup};
+  cout << "  Speedup VEB/BST: " << prom_bst / prom_veb << "x\n";
 }
-
-// ======================== Generar README ========================
-
-void generar_readme(const vector<Resultado> &resultados) {
-  ofstream out("README.md");
-  out << "# Cache-Oblivious Static Tree — Benchmark\n\n";
-  out << "Comparacion de tiempos de busqueda entre un **BST con punteros** y un\n";
-  out << "**arbol estatico con layout van Emde Boas (vEB)**.\n\n";
-  out << "## Compilacion y ejecucion\n\n";
-  out << "```bash\n";
-  out << "g++ -O2 -std=c++17 -o benchmark cache-oblivious.cpp\n";
-  out << "./benchmark          # Linux / macOS\n";
-  out << ".\\benchmark.exe      # Windows\n";
-  out << "```\n\n";
-  out << "## Resultados\n\n";
-  out << "| N (elementos) | Consultas | BST (ms) | vEB (ms) | Speedup |\n";
-  out << "|:-------------:|:---------:|:--------:|:--------:|:-------:|\n";
-  for (auto &r : resultados) {
-    out << "| " << r.n_elems << " | " << r.n_consult << " | "
-        << fixed << setprecision(2) << r.t_bst << " | " << r.t_veb << " | "
-        << setprecision(2) << r.speedup << "x |\n";
-  }
-  out << "\n> Cada medicion es el promedio de 5 repeticiones.\n\n";
-  out << "## Por que el layout vEB es mas rapido?\n\n";
-  out << "- **Localidad espacial**: los nodos padre e hijo quedan contiguos en\n";
-  out << "  memoria, reduciendo *cache misses*.\n";
-  out << "- **Arreglo compacto**: cada nodo ocupa 12 bytes (valor + 2 indices)\n";
-  out << "  vs ~24 bytes del BST con punteros (dato + 2 punteros de 8 bytes).\n";
-  out << "- **Sin dispersion de heap**: el BST asigna cada nodo con `new`,\n";
-  out << "  esparciendo datos por toda la RAM. El vEB usa un solo `vector`\n";
-  out << "  contiguo.\n";
-  out << "- **Menos trafico de cache**: a medida que N crece, el arbol ya no\n";
-  out << "  cabe en cache L2/L3 y el layout vEB minimiza los accesos a RAM.\n";
-  out.close();
-  cout << "\n[README.md generado con tabla de resultados]\n";
-}
-
-// ======================== Main ========================
-=======
-class Node{
-};
->>>>>>> e1da487cf989ff506949c5175e8f7301c7e1f742
 
 int main() {
   const int T = 5;
-  cout << "Benchmark: BST con punteros vs Cache-Oblivious Static Tree (vEB)\n";
-  cout << "Repeticiones por prueba: " << T << "\n";
 
-<<<<<<< HEAD
-  vector<Resultado> resultados;
-  resultados.push_back(experimento(1'000, 100'000, T));
-  resultados.push_back(experimento(10'000, 100'000, T));
-  resultados.push_back(experimento(100'000, 100'000, T));
-  resultados.push_back(experimento(1'000'000, 1'000'000, T));
-  resultados.push_back(experimento(5'000'000, 1'000'000, T));
+  cout << "Benchmark: BST con punteros vs Cache-Oblivious Static Tree\n";
+  cout << "Repeticiones: " << T << "\n";
 
-  generar_readme(resultados);
+  experimento(10'000, 10'000, T);
+  experimento(100'000, 100'000, T);
+  experimento(1'000'000, 1'000'000, T);
+
   return 0;
-=======
-    // Crear vectores
-    vector<int> vec10k;
-    vector<int> vec100k;
-    vector<int> vec1M;
-
-    // Insertar valores secuencialmente en vector de 10k
-    for (int i = 0; i < 10000; i++) {
-        vec10k.push_back(i);
-    }
-
-    // Insertar valores secuencialmente en vector de 100k
-    for (int i = 0; i < 100000; i++) {
-        vec100k.push_back(i);
-    }
-
-    // Insertar valores secuencialmente en vector de 1M
-    for (int i = 0; i < 1000000; i++) {
-        vec1M.push_back(i);
-    }
-
-    cout << "Vectores llenados correctamente." << endl;
-
-    return 0;
->>>>>>> e1da487cf989ff506949c5175e8f7301c7e1f742
 }
